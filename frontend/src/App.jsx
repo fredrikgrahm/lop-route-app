@@ -20,19 +20,27 @@ function MapClickHandler({ onMapClick }) {
   return null;
 }
 
-function createNumberedIcon(number) {
+function createNumberedIcon(number, type = "default") {
+  const background =
+    type === "start"
+      ? "#22c55e"
+      : type === "end"
+      ? "#ef4444"
+      : "#38bdf8";
+  const color = type === "default" ? "#082f49" : "#ffffff";
+
   return L.divIcon({
     className: "",
     html: `
       <div style="
-        background:#38bdf8;
+        background:${background};
         width:32px;
         height:32px;
         border-radius:999px;
         display:flex;
         align-items:center;
         justify-content:center;
-        color:#082f49;
+        color:${color};
         font-weight:800;
         border:3px solid white;
         box-shadow:0 2px 8px rgba(0,0,0,0.35);
@@ -43,6 +51,37 @@ function createNumberedIcon(number) {
     iconSize: [32, 32],
     iconAnchor: [16, 16],
   });
+}
+
+function createDirectionArrowIcon(angle) {
+  return L.divIcon({
+    className: "",
+    html: `
+      <div style="
+        transform: rotate(${angle}deg);
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-bottom: 8px solid #111;
+        filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+      "></div>
+    `,
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+    popupAnchor: [0, -6],
+  });
+}
+
+function getBearing(from, to) {
+  const [lat1, lon1] = from.map((deg) => (deg * Math.PI) / 180);
+  const [lat2, lon2] = to.map((deg) => (deg * Math.PI) / 180);
+  const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+  const bearing = (Math.atan2(y, x) * 180) / Math.PI;
+  return (bearing + 360) % 360;
 }
 
 function App() {
@@ -116,6 +155,15 @@ function App() {
 
     setPoints(nextPoints);
 
+    getRoute(nextPoints);
+  }
+
+  function handlePointDrag(index, e) {
+    const nextPoints = [...points];
+    const { lat, lng } = e.target.getLatLng();
+
+    nextPoints[index] = [lat, lng];
+    setPoints(nextPoints);
     getRoute(nextPoints);
   }
 
@@ -193,7 +241,7 @@ function App() {
         </div>
 
         <div className="hint">
-          Tips: sätt ut flera punkter för att styra rutten mer exakt.
+          Tips: sätt ut flera punkter för att styra rutten mer exakt. Dra en punkt för att justera vägen.
         </div>
       </aside>
 
@@ -210,22 +258,57 @@ function App() {
 
           <MapClickHandler onMapClick={handleMapClick} />
 
-          {points.map((point, index) => (
-            <Marker
-              key={index}
-              position={point}
-              icon={createNumberedIcon(index + 1)}
-            />
-          ))}
+          {points.map((point, index) => {
+            const type =
+              index === 0 ? "start" : index === points.length - 1 ? "end" : "default";
+
+            return (
+              <Marker
+                key={index}
+                position={point}
+                draggable
+                eventHandlers={{
+                  dragend: (e) => handlePointDrag(index, e),
+                }}
+                icon={createNumberedIcon(index + 1, type)}
+              />
+            );
+          })}
 
           {route.length > 1 && (
-            <Polyline
-              positions={route}
-              pathOptions={{
-                color: "#38bdf8",
-                weight: 5,
-              }}
-            />
+            <>
+              {route.slice(0, -1)
+                .map((point, index) => ({ point, index }))
+                .filter(({ index }) => {
+                  const step = Math.max(1, Math.floor(route.length / 10));
+                  return index % step === 0;
+                })
+                .map(({ point, index }) => {
+                  const nextPoint = route[index + 1];
+                  const midpoint = [
+                    (point[0] + nextPoint[0]) / 2,
+                    (point[1] + nextPoint[1]) / 2,
+                  ];
+                  const bearing = getBearing(point, nextPoint);
+
+                  return (
+                    <Marker
+                      key={`arrow-${index}`}
+                      position={midpoint}
+                      icon={createDirectionArrowIcon(bearing)}
+                      interactive={false}
+                    />
+                  );
+                })}
+
+              <Polyline
+                positions={route}
+                pathOptions={{
+                  color: "#38bdf8",
+                  weight: 5,
+                }}
+              />
+            </>
           )}
         </MapContainer>
       </main>
