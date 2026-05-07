@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -90,6 +90,57 @@ function App() {
   const [distanceKm, setDistanceKm] = useState(0);
   const [durationMin, setDurationMin] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [savedRoutes, setSavedRoutes] = useState([]);
+  const [routeName, setRouteName] = useState("");
+  const [showSavedRoutesOnly, setShowSavedRoutesOnly] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("lopRouteSavedRoutes");
+    if (saved) {
+      try {
+        setSavedRoutes(JSON.parse(saved));
+      } catch (error) {
+        console.warn("Failed to parse saved routes:", error);
+      }
+    }
+  }, []);
+
+  function persistSavedRoutes(routes) {
+    localStorage.setItem("lopRouteSavedRoutes", JSON.stringify(routes));
+  }
+
+  function saveRoute() {
+    if (points.length < 2) {
+      alert("Lägg till minst två punkter innan du sparar rutten.");
+      return;
+    }
+
+    const name = routeName.trim() || `Rutt ${savedRoutes.length + 1}`;
+    const newRoute = {
+      id: Date.now(),
+      name,
+      points,
+      distanceKm,
+      durationMin,
+      createdAt: new Date().toISOString(),
+    };
+
+    const nextSavedRoutes = [newRoute, ...savedRoutes];
+    setSavedRoutes(nextSavedRoutes);
+    persistSavedRoutes(nextSavedRoutes);
+    setRouteName("");
+  }
+
+  function loadSavedRoute(savedRoute) {
+    setPoints(savedRoute.points);
+    getRoute(savedRoute.points);
+  }
+
+  function deleteSavedRoute(id) {
+    const nextSavedRoutes = savedRoutes.filter((route) => route.id !== id);
+    setSavedRoutes(nextSavedRoutes);
+    persistSavedRoutes(nextSavedRoutes);
+  }
 
   async function getRoute(nextPoints) {
     if (nextPoints.length < 2) {
@@ -227,22 +278,74 @@ function App() {
         </div>
 
         <div className="actions">
-          <button className="primary">Spara rutt</button>
+          {!showSavedRoutesOnly ? (
+            <>
+              <input
+                type="text"
+                value={routeName}
+                onChange={(e) => setRouteName(e.target.value)}
+                placeholder="Namn på rutten"
+                className="route-name-input"
+              />
 
-          <button>Dela</button>
+              <button
+                className="primary"
+                onClick={saveRoute}
+                disabled={points.length < 2}
+              >
+                Spara rutt
+              </button>
 
-          <button onClick={undoLastPoint} disabled={points.length === 0}>
-            Ångra senaste punkt
-          </button>
+              <button onClick={() => setShowSavedRoutesOnly(true)} disabled={savedRoutes.length === 0}>
+                Visa sparade rundor
+              </button>
 
-          <button onClick={clearRoute} disabled={points.length === 0}>
-            Rensa
-          </button>
+              <button>Dela</button>
+
+              <button onClick={undoLastPoint} disabled={points.length === 0}>
+                Ångra senaste punkt
+              </button>
+
+              <button onClick={clearRoute} disabled={points.length === 0}>
+                Rensa
+              </button>
+            </>
+          ) : (
+            <button onClick={() => setShowSavedRoutesOnly(false)}>
+              Stäng sparade rundor
+            </button>
+          )}
         </div>
 
-        <div className="hint">
-          Tips: sätt ut flera punkter för att styra rutten mer exakt. Dra en punkt för att justera vägen.
-        </div>
+        {showSavedRoutesOnly ? (
+          <div className="saved-routes">
+            <h2>Sparade rundor</h2>
+            <ul>
+              {savedRoutes.map((savedRoute) => (
+                <li key={savedRoute.id} className="saved-route-item">
+                  <div>
+                    <strong>{savedRoute.name}</strong>
+                    <div className="saved-route-meta">
+                      {savedRoute.distanceKm.toFixed(2)} km · {Math.round(savedRoute.durationMin)} min
+                    </div>
+                  </div>
+                  <div className="saved-route-actions">
+                    <button onClick={() => loadSavedRoute(savedRoute)}>
+                      Ladda
+                    </button>
+                    <button onClick={() => deleteSavedRoute(savedRoute.id)}>
+                      Ta bort
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="hint">
+            Tips: sätt ut flera punkter för att styra rutten mer exakt. Dra en punkt för att justera vägen.
+          </div>
+        )}
       </aside>
 
       <main className="mapArea">
