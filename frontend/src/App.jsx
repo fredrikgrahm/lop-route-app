@@ -103,6 +103,22 @@ function App() {
         console.warn("Failed to parse saved routes:", error);
       }
     }
+
+    // Load route from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const pointsParam = urlParams.get("points");
+    if (pointsParam) {
+      try {
+        const loadedPoints = pointsParam.split(";").map(coord => {
+          const [lat, lng] = coord.split(",").map(Number);
+          return [lat, lng];
+        });
+        setPoints(loadedPoints);
+        getRoute(loadedPoints);
+      } catch (error) {
+        console.warn("Failed to parse points from URL:", error);
+      }
+    }
   }, []);
 
   function persistSavedRoutes(routes) {
@@ -140,6 +156,30 @@ function App() {
     const nextSavedRoutes = savedRoutes.filter((route) => route.id !== id);
     setSavedRoutes(nextSavedRoutes);
     persistSavedRoutes(nextSavedRoutes);
+  }
+
+  function shareRoute() {
+    if (points.length < 2) {
+      alert("Lägg till minst två punkter innan du delar rutten.");
+      return;
+    }
+
+    const pointsParam = points.map(point => `${point[0]},${point[1]}`).join(";");
+    const shareUrl = `${window.location.origin}${window.location.pathname}?points=${encodeURIComponent(pointsParam)}`;
+
+    if (navigator.share) {
+      navigator.share({
+        title: "Min löprunda",
+        text: `Kolla min löprunda: ${distanceKm.toFixed(2)} km, ${Math.round(durationMin)} min`,
+        url: shareUrl,
+      });
+    } else {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        alert("Länken till rutten har kopierats till urklipp!");
+      }).catch(() => {
+        alert(`Kopiera denna länk: ${shareUrl}`);
+      });
+    }
   }
 
   async function getRoute(nextPoints) {
@@ -300,7 +340,9 @@ function App() {
                 Visa sparade rundor
               </button>
 
-              <button>Dela</button>
+              <button onClick={shareRoute} disabled={points.length < 2}>
+                Dela
+              </button>
 
               <button onClick={undoLastPoint} disabled={points.length === 0}>
                 Ångra senaste punkt
