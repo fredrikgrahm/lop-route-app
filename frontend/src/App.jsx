@@ -193,21 +193,66 @@ function App() {
     setIsLoading(true);
 
     try {
+      // Use OSRM with improved walking route logic - supports unlimited waypoints by routing segments
       const coordinates = nextPoints
         .map((point) => `${point[1]},${point[0]}`)
         .join(";");
 
-      const footUrl = `https://router.project-osrm.org/route/v1/foot/${coordinates}?overview=full&geometries=geojson`;
-
-      const drivingUrl = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
+      // Try foot routing first with all points
+      const footUrl = `https://router.project-osrm.org/route/v1/foot/${coordinates}?overview=full&geometries=geojson&steps=true`;
 
       let response = await fetch(footUrl);
       let data = await response.json();
 
-      // fallback till bilvägar om gångväg misslyckas
+      // If direct foot routing fails, try segmented routing between consecutive points
+      let totalDuration = 0; // Declare here for scope
       if (!data.routes || data.routes.length === 0) {
-        response = await fetch(drivingUrl);
-        data = await response.json();
+        console.log("Direct foot route failed, trying segmented routing...");
+
+        // Route between consecutive points and combine
+        const routeSegments = [];
+        let totalDistance = 0;
+        totalDuration = 0;
+
+        for (let i = 0; i < nextPoints.length - 1; i++) {
+          const segmentCoords = [nextPoints[i], nextPoints[i + 1]]
+            .map((point) => `${point[1]},${point[0]}`)
+            .join(";");
+
+          const segmentUrl = `https://router.project-osrm.org/route/v1/foot/${segmentCoords}?overview=full&geometries=geojson`;
+          const segmentResponse = await fetch(segmentUrl);
+          const segmentData = await segmentResponse.json();
+
+          if (segmentData.routes && segmentData.routes.length > 0) {
+            // Add segment coordinates (skip first point to avoid duplicates except for first segment)
+            const segmentCoords = segmentData.routes[0].geometry.coordinates;
+            if (i === 0) {
+              routeSegments.push(...segmentCoords);
+            } else {
+              routeSegments.push(...segmentCoords.slice(1));
+            }
+
+            totalDistance += segmentData.routes[0].distance;
+            // Use realistic walking pace for duration
+            const segmentDistanceKm = segmentData.routes[0].distance / 1000;
+            totalDuration += segmentDistanceKm * 12; // 12 min/km walking pace (5 km/h)
+          } else {
+            throw new Error(`Could not route between points ${i + 1} and ${i + 2}`);
+          }
+        }
+
+        // Create combined route data
+        data = {
+          routes: [{
+            geometry: {
+              coordinates: routeSegments
+            },
+            distance: totalDistance
+          }]
+        };
+
+        // Set custom duration for segmented routes
+        setDurationMin(totalDuration);
       }
 
       if (!data.routes || data.routes.length === 0) {
@@ -221,13 +266,14 @@ function App() {
       setRoute(routeCoordinates);
 
       const distanceInKm = data.routes[0].distance / 1000;
-
       setDistanceKm(distanceInKm);
 
-      // löptempo
-      const runningPaceMinPerKm = 6;
-
-      setDurationMin(distanceInKm * runningPaceMinPerKm);
+      // Only set duration if we didn't set it above for segmented routes
+      if (totalDuration === 0 && data.routes[0].duration) {
+        const durationInSec = data.routes[0].duration;
+        const durationInMin = durationInSec / 60;
+        setDurationMin(durationInMin);
+      }
     } catch (error) {
       console.error("Fel vid hämtning av rutt:", error);
 
@@ -235,7 +281,7 @@ function App() {
       setDistanceKm(0);
       setDurationMin(0);
 
-      alert("Kunde inte skapa rutt.");
+      alert("Kunde inte skapa rutt. Kontrollera nätverksanslutningen.");
     } finally {
       setIsLoading(false);
     }
@@ -282,8 +328,7 @@ function App() {
           <h1>Planera din runda</h1>
 
           <p className="muted">
-            Klicka ut punkter på kartan. Appen försöker använda gång- och
-            cykelvägar först.
+            Klicka ut punkter på kartan. Appen använder gångvägar för löpning.
           </p>
         </div>
 
