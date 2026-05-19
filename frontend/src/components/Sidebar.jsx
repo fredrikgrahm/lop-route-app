@@ -1,4 +1,6 @@
 import { formatDuration } from "../utils/routeHelpers";
+import SavedRoutesList from "./SavedRoutesList";
+import PointList from "./PointList";
 
 export default function Sidebar({
   points,
@@ -12,10 +14,12 @@ export default function Sidebar({
   onShare,
   onUndo,
   onClear,
+  onRemovePoint,
   savedRoutes,
   showSavedRoutesOnly,
   onLoadSavedRoute,
   onDeleteSavedRoute,
+  onRenameSavedRoute,
 }) {
   return (
     <>
@@ -50,6 +54,8 @@ export default function Sidebar({
           <strong>{isLoading ? "Hämtar" : "Klar"}</strong>
         </div>
       </div>
+
+      <PointList points={points} onRemovePoint={onRemovePoint} />
 
       <div className="actions">
         {!showSavedRoutesOnly ? (
@@ -88,25 +94,12 @@ export default function Sidebar({
       </div>
 
       {showSavedRoutesOnly ? (
-        <div className="saved-routes">
-          <h2>Sparade rundor</h2>
-          <ul>
-            {savedRoutes.map((savedRoute) => (
-              <li key={savedRoute.id} className="saved-route-item">
-                <div>
-                  <strong>{savedRoute.name}</strong>
-                  <div className="saved-route-meta">
-                    {savedRoute.distanceKm.toFixed(2)} km · {Math.round(savedRoute.durationMin)} min
-                  </div>
-                </div>
-                <div className="saved-route-actions">
-                  <button onClick={() => onLoadSavedRoute(savedRoute)}>Ladda</button>
-                  <button onClick={() => onDeleteSavedRoute(savedRoute.id)}>Ta bort</button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <SavedRoutesList
+          savedRoutes={savedRoutes}
+          onLoadSavedRoute={onLoadSavedRoute}
+          onDeleteSavedRoute={onDeleteSavedRoute}
+          onRenameSavedRoute={onRenameSavedRoute}
+        />
       ) : (
         <div className="hint">
           Tips: sätt ut flera punkter för att styra rutten mer exakt. Dra en punkt för att justera vägen.

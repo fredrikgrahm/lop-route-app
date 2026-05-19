@@ -84,10 +84,16 @@ export function parsePointsFromUrl(search) {
     return null;
   }
 
-  return pointsParam.split(";").map((coord) => {
+  const points = [];
+  for (const coord of pointsParam.split(";")) {
     const [lat, lng] = coord.split(",").map(Number);
-    return [lat, lng];
-  });
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return null;
+    }
+    points.push([lat, lng]);
+  }
+
+  return points.length >= 2 ? points : null;
 }
 
 async function fetchJson(url) {

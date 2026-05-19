@@ -9,30 +9,39 @@ import {
   serializePoints,
 } from "./utils/routeHelpers";
 
+function getInitialPoints() {
+  return parsePointsFromUrl(window.location.search) || [];
+}
+
+function getInitialSavedRoutes() {
+  const saved = localStorage.getItem("lopRouteSavedRoutes");
+
+  if (!saved) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(saved);
+  } catch (error) {
+    console.warn("Failed to parse saved routes:", error);
+    return [];
+  }
+}
+
 function App() {
-  const [points, setPoints] = useState([]);
+  const [points, setPoints] = useState(getInitialPoints);
   const [route, setRoute] = useState([]);
   const [distanceKm, setDistanceKm] = useState(0);
   const [durationMin, setDurationMin] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [savedRoutes, setSavedRoutes] = useState([]);
+  const [savedRoutes, setSavedRoutes] = useState(getInitialSavedRoutes);
   const [routeName, setRouteName] = useState("");
   const [showSavedRoutesOnly, setShowSavedRoutesOnly] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("lopRouteSavedRoutes");
-    if (saved) {
-      try {
-        setSavedRoutes(JSON.parse(saved));
-      } catch (error) {
-        console.warn("Failed to parse saved routes:", error);
-      }
-    }
-
-    const loadedPoints = parsePointsFromUrl(window.location.search);
-    if (loadedPoints) {
-      setPoints(loadedPoints);
-      getRoute(loadedPoints);
+    const loadedPoints = getInitialPoints();
+    if (loadedPoints.length >= 2) {
+      void getRoute(loadedPoints);
     }
   }, []);
 
@@ -71,6 +80,30 @@ function App() {
     const nextSavedRoutes = savedRoutes.filter((route) => route.id !== id);
     setSavedRoutes(nextSavedRoutes);
     persistSavedRoutes(nextSavedRoutes);
+  }
+
+  function renameSavedRoute(id) {
+    const routeToRename = savedRoutes.find((route) => route.id === id);
+    if (!routeToRename) return;
+
+    const name = window.prompt("Skriv nytt namn för rutten:", routeToRename.name);
+    if (name === null) return;
+
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    const nextSavedRoutes = savedRoutes.map((route) =>
+      route.id === id ? { ...route, name: trimmed } : route
+    );
+
+    setSavedRoutes(nextSavedRoutes);
+    persistSavedRoutes(nextSavedRoutes);
+  }
+
+  function removePoint(index) {
+    const nextPoints = points.filter((_, pointIndex) => pointIndex !== index);
+    setPoints(nextPoints);
+    getRoute(nextPoints);
   }
 
   function shareRoute() {
@@ -171,10 +204,12 @@ function App() {
           onShare={shareRoute}
           onUndo={undoLastPoint}
           onClear={clearRoute}
+          onRemovePoint={removePoint}
           savedRoutes={savedRoutes}
           showSavedRoutesOnly={showSavedRoutesOnly}
           onLoadSavedRoute={loadSavedRoute}
           onDeleteSavedRoute={deleteSavedRoute}
+          onRenameSavedRoute={renameSavedRoute}
         />
       </aside>
 

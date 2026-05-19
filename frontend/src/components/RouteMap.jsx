@@ -1,10 +1,23 @@
-import { MapContainer, TileLayer, Marker, Polyline } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
+import { useEffect } from "react";
 import MapClickHandler from "./MapClickHandler";
 import {
   createDirectionArrowIcon,
   createNumberedIcon,
   getBearing,
 } from "../utils/routeHelpers";
+
+function RouteBounds({ route }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (route.length > 1) {
+      map.fitBounds(route, { padding: [40, 40] });
+    }
+  }, [route, map]);
+
+  return null;
+}
 
 export default function RouteMap({ points, route, onMapClick, onPointDrag }) {
   return (
@@ -15,6 +28,7 @@ export default function RouteMap({ points, route, onMapClick, onPointDrag }) {
       />
 
       <MapClickHandler onMapClick={onMapClick} />
+      <RouteBounds route={route} />
 
       {points.map((point, index) => {
         const type =
